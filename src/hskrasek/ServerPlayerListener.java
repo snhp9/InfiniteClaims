@@ -36,7 +36,6 @@ public class ServerPlayerListener implements Listener
 	Logger logger = Logger.getLogger("Minecraft");
 	public ServerPlayerListener(InfiniteClaims instance)
 	{
-		this.logger.info("Listener has been registered.");
 		plugin = instance;
 	}
 	
@@ -47,7 +46,6 @@ public class ServerPlayerListener implements Listener
 		LocalPlayer lp = plugin.getWorldGuard().wrapPlayer(p);
 		World w = p.getWorld();
 		ChunkGenerator cg = w.getGenerator();
-		this.logger.info("Player: " + p + " Changed worlds");
 		if(cg instanceof InfinitePlotsGenerator != false)
 		{
 			int plotSize = ((InfinitePlotsGenerator)cg).getPlotSize();
@@ -173,38 +171,40 @@ public class ServerPlayerListener implements Listener
 						p.performCommand("/contract 1 up"); // de-selects bedrock at y = 1
 						p.performCommand("region claim " + plotName + " " + p.getName()); // claims region for player
 						
-					if(plugin.signPlacementMethod == 1)
-						{
-							Location entranceLocation = new Location(w, bottomRight.getX() + (plotSize / 2), y, bottomRight.getZ() + (plotSize - 1));
-			                Block entranceBlock = entranceLocation.getBlock();
-			                PlaceSign("---------------", plugin.ownerSignPrefix, plotName, "---------------", entranceBlock, BlockFace.WEST);
-						}
-						else if(plugin.signPlacementMethod == 2)
-						{
-							Location centerLocation = new Location(w, bottomRight.getX() + (plotSize / 2), y, bottomRight.getZ() + (plotSize / 2));						
-			                Block centerBlock = centerLocation.getBlock();
-			                PlaceSign("---------------", plugin.ownerSignPrefix, plotName, "---------------", centerBlock, BlockFace.WEST);
-						}
-						else if(plugin.signPlacementMethod == 0)
-						{
-							// creates a sign for the bottom right corner
-							
-							Location bottomRightTest = new Location(w, bottomRight.getX() - 1, bottomRight.getY(), bottomRight.getZ() -1);
-			                Block brBlock = bottomRightTest.getBlock();
-			                placeSign("---------------", plugin.ownerSignPrefix, plotName, "---------------", brBlock, BlockFace.SOUTH_WEST);
-			                
-							// creates a sign for the bottom left corner
-			                Block blBlock = bottomLeft.getBlock();
-			                placeSign("---------------", plugin.ownerSignPrefix, plotName, "---------------", blBlock, BlockFace.NORTH_WEST);
-
-							// creates a sign for the top right corner
-			                Block trBlock = topRight.getBlock();
-			                placeSign("---------------", plugin.ownerSignPrefix, plotName, "---------------", trBlock, BlockFace.SOUTH_EAST);
-			                
-			                // creates a sign for the top left corner
-			                Block tlBlock = topLeft.getBlock();
-			                placeSign("---------------", plugin.ownerSignPrefix, plotName, "---------------", tlBlock, BlockFace.NORTH_EAST);		                
-						}
+						if(plugin.signPlacementMethod == 1)
+//							{
+//								Location entranceLocation = new Location(w, bottomRight.getX() + (plotSize / 2), y, bottomRight.getZ() + (plotSize - 1));
+//				                Block entranceBlock = entranceLocation.getBlock();
+//				                placeSign(plugin.ownerSignPrefix, plotName, entranceBlock, BlockFace.WEST);
+//							}
+//							else if(plugin.signPlacementMethod == 2)
+//							{
+//								Location centerLocation = new Location(w, bottomRight.getX() + (plotSize / 2), y, bottomRight.getZ() + (plotSize / 2));						
+//				                Block centerBlock = centerLocation.getBlock();
+//				                placeSign(plugin.ownerSignPrefix, plotName, centerBlock, BlockFace.WEST);
+//							}
+//							else if(plugin.signPlacementMethod == 0)
+//							{
+//								// creates a sign for the bottom right corner
+//								
+//								Location bottomRightTest = new Location(w, bottomRight.getX() - 1, bottomRight.getY(), bottomRight.getZ() -1);
+//				                Block brBlock = bottomRightTest.getBlock();
+//				                placeSign(plugin.ownerSignPrefix, plotName, brBlock, BlockFace.NORTH_EAST);
+//				                
+//								// creates a sign for the bottom left corner
+//				                Location bottomLeftTest = new Location(w, bottomLeft.getX() + 1, bottomLeft.getY(), bottomLeft.getZ() + 1);
+//				                Block blBlock = bottomLeftTest.getBlock();
+//				                placeSign(plugin.ownerSignPrefix, plotName, blBlock, BlockFace.SOUTH_EAST);
+////				                PlaceSign("---------------", plugin.ownerSignPrefix, plotName, "", blBlock, BlockFace.NORTH_WEST);
+	//
+//								// creates a sign for the top right corner
+//				                Block trBlock = topRight.getBlock();
+////				                PlaceSign("---------------", plugin.ownerSignPrefix, plotName, "", trBlock, BlockFace.SOUTH_EAST);
+//				                
+//				                // creates a sign for the top left corner
+//				                Block tlBlock = topLeft.getBlock();
+////				                PlaceSign("---------------", plugin.ownerSignPrefix, plotName, "", tlBlock, BlockFace.NORTH_EAST);		                
+//							}
 		                
 		                // teleports player to their plot
 						p.teleport(new Location(w, bottomRight.getX() + (plotSize / 2), y, bottomRight.getZ() + (plotSize / 2)));
@@ -229,36 +229,20 @@ public class ServerPlayerListener implements Listener
 		}
 	}
 	
-	public void placeSign(String firstLine, String secondLine, String thirdLine, String fourthLine, Block theBlock, BlockFace facingDirection)
+	public void placeSign(String plotOwnerPrefix, String plotOwner, Block theBlock, BlockFace facingDirection)
 	{
+		logger.info("Recieved block: " + theBlock);
 		theBlock.setType(Material.SIGN_POST);
-		BlockState theState = theBlock.getState();
-		SignChangeEvent signChange = (SignChangeEvent)theState;
-		signChange.setLine(0, firstLine);
-		signChange.setLine(1, secondLine);
-		signChange.setLine(2, thirdLine);
-		signChange.setLine(3, fourthLine);
-
-		theState.update(true);
-			
+		Sign theSign = (Sign)theBlock.getState();
+		theSign.setLine(1, plotOwnerPrefix);
+		theSign.setLine(2, plotOwner);
+		
+		if(facingDirection == BlockFace.SOUTH_WEST)
+		{
+			theSign.setRawData((byte) 0xE);
+		}
+		theSign.update();
 	}
-	
-	public void PlaceSign(String lineOne, String lineTwo, String lineThree, String lineFour, Block block, BlockFace signDirection)
-	{	
-		block.setType(Material.SIGN_POST);
-        BlockState blockState = block.getState();
-        Sign sign = (Sign)blockState;
-        sign.setLine(0, lineOne);
-        sign.setLine(1, lineTwo);
-        sign.setLine(2, lineThree);
-        sign.setLine(3, lineFour);
-        
-        org.bukkit.material.Sign blockFaceSign = new org.bukkit.material.Sign(); // needed to set the direction of the sign
-        blockFaceSign.setFacingDirection(signDirection);
-        block.setData(blockFaceSign.getData(), true);
-        blockState.update(true);
-    }
-	
 }
 
 

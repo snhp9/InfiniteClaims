@@ -96,7 +96,6 @@ public class InfiniteClaims extends JavaPlugin
 		
 		playerListener = new ServerPlayerListener(this);		
 		getServer().getPluginManager().registerEvents(playerListener, this);
-//		pm.registerEvent(Event.Type.PLAYER_CHANGED_WORLD, this.playerListener, Event.Priority.Normal, this);
 		
 		logger("has been enabled.","normal");
 	}
