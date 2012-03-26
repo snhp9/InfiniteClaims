@@ -8,33 +8,38 @@ import java.util.Set;
 import java.util.logging.Logger;
 
 import org.bukkit.ChatColor;
+import org.bukkit.DyeColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
-import org.bukkit.block.BlockState;
 import org.bukkit.block.Sign;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.generator.ChunkGenerator;
-import org.bukkit.event.block.SignChangeEvent;
+import org.bukkit.material.Wool;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import uk.co.jacekk.bukkit.infiniteplots.InfinitePlotsGenerator;
-
+import com.sk89q.worldedit.*;
 import com.sk89q.worldedit.bukkit.WorldEditPlugin;
 import com.sk89q.worldedit.bukkit.selections.CuboidSelection;
+import com.sk89q.worldedit.regions.Region;
+import com.sk89q.worldedit.regions.RegionOperationException;
+import com.sk89q.worldguard.domains.*;
 import com.sk89q.worldguard.LocalPlayer;
 import com.sk89q.worldguard.bukkit.WorldGuardPlugin;
+import com.sk89q.worldguard.protection.databases.ProtectionDatabaseException;
 import com.sk89q.worldguard.protection.managers.RegionManager;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
+import com.sk89q.worldguard.protection.regions.ProtectedCuboidRegion;
 
-public class ServerPlayerListener implements Listener
+public class InfiniteClaimsListener implements Listener
 {
 	InfiniteClaims plugin;
 	Logger logger = Logger.getLogger("Minecraft");
-	public ServerPlayerListener(InfiniteClaims instance)
+	public InfiniteClaimsListener(InfiniteClaims instance)
 	{
 		plugin = instance;
 	}
@@ -49,13 +54,12 @@ public class ServerPlayerListener implements Listener
 		if(cg instanceof InfinitePlotsGenerator != false)
 		{
 			int plotSize = ((InfinitePlotsGenerator)cg).getPlotSize();
-			//int startX = 4;
-			//int startZ = 4;
-			int y = plugin.plotHeight + 3;
+//			int y = plugin.plotHeight + 3;
+			int y = plugin.plotHeight;
 			int walkwaySize = 7; // width of walkway between plots, this is not configurable in InfinitePlots so I'm not going to make it configurable in this plugin.
 			
 			Location startLoc = new Location(w, plugin.roadOffsetX, y, plugin.roadOffsetZ);
-			
+			plugin.log.info("Starting Location: " + startLoc.toString());
 			WorldGuardPlugin wgp = plugin.getWorldGuard();
 			WorldEditPlugin wep = plugin.getWorldEdit();
 			String pluginPrefix = ChatColor.WHITE + "[" + ChatColor.RED + "Plot Manager" + ChatColor.WHITE + "] ";
@@ -158,53 +162,94 @@ public class ServerPlayerListener implements Listener
 					if(failedAttemptCount < failedAttemptMaxCount)
 					{
 						Location bottomRight = workingLocation; // not really needed, I did it just for clarity
+						bottomRight.getBlock().setType(Material.WOOL);
+						bottomRight.getBlock().setData(new Wool(DyeColor.RED).getData());
 		                Location bottomLeft = new Location(w, workingLocation.getX() + (plotSize - 1), y, workingLocation.getZ());
+		                bottomLeft.getBlock().setType(Material.WOOL);
+						bottomLeft.getBlock().setData(new Wool(DyeColor.BLUE).getData());
 		                Location topRight = new Location(w, workingLocation.getX(), y, workingLocation.getZ() + (plotSize - 1));
-		                Location topLeft = new Location(w, workingLocation.getX() + (plotSize - 1), y, workingLocation.getZ() + (plotSize - 1));		
-						wep.setSelection(p, new CuboidSelection(w, bottomRight, topLeft)); 
-				
+		                topRight.getBlock().setType(Material.WOOL);
+						topRight.getBlock().setData(new Wool(DyeColor.GREEN).getData());
+		                Location topLeft = new Location(w, workingLocation.getX() + (plotSize - 1), y, workingLocation.getZ() + (plotSize - 1));
+		                topLeft.getBlock().setType(Material.WOOL);
+						topLeft.getBlock().setData(new Wool(DyeColor.YELLOW).getData());
+						
+		                plugin.log.info("Bottom Right: "+ bottomRight.toString());
+		                plugin.log.info("Top Left: " + topLeft.toString());
+		               
+						CuboidSelection plot = new CuboidSelection(w, bottomRight, topLeft);
+						p.sendMessage("Selection Max: " + plot.getMaximumPoint() + " - Selection Min: " + plot.getMinimumPoint());
+						plugin.log.info("Selection Max: " + plot.getMaximumPoint() + " - Selection Min: " + plot.getMinimumPoint());
+						Region tempRegion = null;
+						try {
+							tempRegion = plot.getRegionSelector().getRegion();
+							tempRegion.expand(new Vector(0, w.getMaxHeight(), 0), new Vector(0, (-(plugin.plotHeight)+1), 0));
+						} 
+						catch (IncompleteRegionException e) 
+						{
+							p.sendMessage(e.getMessage());
+						}
+						catch(RegionOperationException e)
+						{
+							p.sendMessage(e.getMessage());
+						}
 						String plotName = "Plot" + p.getName() + failedAttemptCount; // failedAttemptCount is appended at the end for uniqueness
 						p.sendMessage(pluginPrefix + "I've found a plot for you! Naming it: " + plotName);
 						
-						// both the following commands are issued as if the player typed and executed them
-						p.performCommand("/expand vert"); // expands the selection from bedrock to sky
-						p.performCommand("/contract 1 up"); // de-selects bedrock at y = 1
-						p.performCommand("region claim " + plotName + " " + p.getName()); // claims region for player
+						BlockVector minPoint = tempRegion.getMinimumPoint().toBlockVector();
+						BlockVector maxPoint = tempRegion.getMaximumPoint().toBlockVector();
+						ProtectedRegion playersPlot = new ProtectedCuboidRegion(plotName, minPoint, maxPoint);
+						DefaultDomain owner = new DefaultDomain();
+						owner.addPlayer(lp);
+						playersPlot.setOwners(owner);
+						
+						RegionManager mgr = wgp.getGlobalRegionManager().get(w) ;
+						mgr.addRegion(playersPlot);
+						try 
+						{
+							mgr.save();
+						} catch (ProtectionDatabaseException e) 
+						{
+							e.getMessage();
+						}
 						
 						if(plugin.signPlacementMethod == 1)
-//							{
-//								Location entranceLocation = new Location(w, bottomRight.getX() + (plotSize / 2), y, bottomRight.getZ() + (plotSize - 1));
-//				                Block entranceBlock = entranceLocation.getBlock();
-//				                placeSign(plugin.ownerSignPrefix, plotName, entranceBlock, BlockFace.WEST);
-//							}
-//							else if(plugin.signPlacementMethod == 2)
-//							{
-//								Location centerLocation = new Location(w, bottomRight.getX() + (plotSize / 2), y, bottomRight.getZ() + (plotSize / 2));						
-//				                Block centerBlock = centerLocation.getBlock();
-//				                placeSign(plugin.ownerSignPrefix, plotName, centerBlock, BlockFace.WEST);
-//							}
-//							else if(plugin.signPlacementMethod == 0)
-//							{
-//								// creates a sign for the bottom right corner
-//								
-//								Location bottomRightTest = new Location(w, bottomRight.getX() - 1, bottomRight.getY(), bottomRight.getZ() -1);
-//				                Block brBlock = bottomRightTest.getBlock();
-//				                placeSign(plugin.ownerSignPrefix, plotName, brBlock, BlockFace.NORTH_EAST);
-//				                
-//								// creates a sign for the bottom left corner
-//				                Location bottomLeftTest = new Location(w, bottomLeft.getX() + 1, bottomLeft.getY(), bottomLeft.getZ() + 1);
-//				                Block blBlock = bottomLeftTest.getBlock();
-//				                placeSign(plugin.ownerSignPrefix, plotName, blBlock, BlockFace.SOUTH_EAST);
-////				                PlaceSign("---------------", plugin.ownerSignPrefix, plotName, "", blBlock, BlockFace.NORTH_WEST);
-	//
-//								// creates a sign for the top right corner
-//				                Block trBlock = topRight.getBlock();
-////				                PlaceSign("---------------", plugin.ownerSignPrefix, plotName, "", trBlock, BlockFace.SOUTH_EAST);
-//				                
-//				                // creates a sign for the top left corner
-//				                Block tlBlock = topLeft.getBlock();
-////				                PlaceSign("---------------", plugin.ownerSignPrefix, plotName, "", tlBlock, BlockFace.NORTH_EAST);		                
-//							}
+						{
+							Location entranceLocation = new Location(w, bottomRight.getX() + (plotSize / 2), y + 3, bottomRight.getZ() + (plotSize - 1));
+			                Block entranceBlock = entranceLocation.getBlock();
+			                placeSign(plugin.ownerSignPrefix, plotName, entranceBlock, BlockFace.WEST);
+						}
+						else if(plugin.signPlacementMethod == 2)
+						{
+							/**
+							 * Change this method, to center of Entrance...maybe, or just get rid of it.
+							 */
+							Location centerLocation = new Location(w, bottomRight.getX() + (plotSize / 2), y, bottomRight.getZ() + (plotSize / 2));						
+			                Block centerBlock = centerLocation.getBlock();
+			                placeSign(plugin.ownerSignPrefix, plotName, centerBlock, BlockFace.WEST);
+						}
+						else if(plugin.signPlacementMethod == 0)
+						{
+							// creates a sign for the bottom right corner
+							Location bottomRightTest = new Location(w, bottomRight.getX() - 1, bottomRight.getY() + 3, bottomRight.getZ() -1);
+			                Block brBlock = bottomRightTest.getBlock();
+			                placeSign(plugin.ownerSignPrefix, plotName, brBlock, BlockFace.NORTH_WEST);
+			                
+							// creates a sign for the bottom left corner
+			                Location bottomLeftTest = new Location(w, bottomLeft.getX() + 1, bottomLeft.getY() + 3, bottomLeft.getZ() - 1);
+			                Block blBlock = bottomLeftTest.getBlock();
+			                placeSign(plugin.ownerSignPrefix, plotName, blBlock, BlockFace.NORTH_EAST);
+
+							// creates a sign for the top right corner
+			                Location topRightSign = new Location(w, topRight.getX() - 1, topRight.getY() + 3, topRight.getZ() + 1);
+			                Block trBlock = topRightSign.getBlock();
+			                placeSign(plugin.ownerSignPrefix, plotName, trBlock, BlockFace.SOUTH_WEST);
+			                
+			                // creates a sign for the top left corner
+			                Location topLeftSign = new Location(w, topLeft.getX() + 1, topLeft.getY() + 3, topLeft.getZ() + 1);
+			                Block tlBlock = topLeftSign.getBlock();
+			                placeSign(plugin.ownerSignPrefix, plotName, tlBlock, BlockFace.SOUTH_EAST);                
+						}
 		                
 		                // teleports player to their plot
 						p.teleport(new Location(w, bottomRight.getX() + (plotSize / 2), y, bottomRight.getZ() + (plotSize / 2)));
@@ -231,15 +276,37 @@ public class ServerPlayerListener implements Listener
 	
 	public void placeSign(String plotOwnerPrefix, String plotOwner, Block theBlock, BlockFace facingDirection)
 	{
-		logger.info("Recieved block: " + theBlock);
+		logger.info("Recieved block: " + theBlock + "Direction: " + facingDirection);
 		theBlock.setType(Material.SIGN_POST);
 		Sign theSign = (Sign)theBlock.getState();
 		theSign.setLine(1, plotOwnerPrefix);
 		theSign.setLine(2, plotOwner);
 		
+		byte ne = 0xA; // North East
+		byte se = 0xE; // South East
+		byte sw = 0x2; // South West
+		byte nw = 0x6; // North West
+		byte w = 0x4;
+		
 		if(facingDirection == BlockFace.SOUTH_WEST)
 		{
-			theSign.setRawData((byte) 0xE);
+			theSign.setRawData((byte) sw);
+		}
+		if(facingDirection == BlockFace.SOUTH_EAST)
+		{
+			theSign.setRawData((byte) se);
+		}
+		if(facingDirection == BlockFace.NORTH_EAST)
+		{
+			theSign.setRawData((byte) ne);
+		}
+		if(facingDirection == BlockFace.NORTH_WEST)
+		{
+			theSign.setRawData((byte) nw);
+		}
+		if(facingDirection == BlockFace.WEST)
+		{
+			theSign.setRawData((byte) w);
 		}
 		theSign.update();
 	}

@@ -1,5 +1,10 @@
+name: InfiniteClaims
 main: hskrasek.InfiniteClaims
 author: hskrasek
 description: InfiniteClaims is a plugin designed for the InfinitePlots world generator to manage the plot allocation via WorldGuard. Originally coded by Toffer, rebuilt by Sekonda and hskrasek.
-version: 1.7h
+version: 2.0
 depend: [InfinitePlots, WorldGuard, WorldEdit]
+commands:
+   plotfile:
+      description: Imports WorldGuard regions into new plots file
+      usage: /<command>
